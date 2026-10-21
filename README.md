@@ -165,9 +165,13 @@ See `REPRODUCIBILITY.md` and `docs/` for the complete protocol.
 
 ## Citation and archival release
 
-The GitHub release and Zenodo record should be published from the same commit.
-Final citation metadata will be added after the complete author list is
-confirmed.
+The validated five-seed experimental outputs accompanying the manuscript's major revision are permanently archived in Zenodo:
+
+**Version-specific DOI (v1.1.0):** https://doi.org/10.5281/zenodo.23441576
+
+**Concept DOI (all versions):** https://doi.org/10.5281/zenodo.22280769
+
+For reproducibility of the revised experiments, cite the version-specific DOI. For a reference that resolves to the latest available version, use the concept DOI.
 
 ## License
 
