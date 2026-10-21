@@ -1,0 +1,101 @@
+{
+  "dataset": "CIC_Bot_IoT",
+  "seed": 42,
+  "test_size": 0.2,
+  "validation_fraction_of_balanced_training": 0.1,
+  "raw_class_counts": {
+    "0": 38435,
+    "1": 11465121
+  },
+  "held_out_test_class_counts": {
+    "0": 7687,
+    "1": 2293025
+  },
+  "balanced_training_class_counts_before_validation_split": {
+    "0": 30748,
+    "1": 30748
+  },
+  "selected_semantic_proxies": {
+    "Burst_Duration": "Flow Duration",
+    "TCP_Timeout": "Bwd IAT Max",
+    "Queue_Drop": "Idle Max",
+    "Normal_Traffic": "Flow IAT Max"
+  },
+  "training_variances_by_group": {
+    "Burst_Duration": {
+      "Flow Duration": 234812656844800.0,
+      "Fwd IAT Total": 188415064670208.0,
+      "Bwd IAT Total": 125080713560064.0
+    },
+    "TCP_Timeout": {
+      "Bwd IAT Max": 97305814368256.0,
+      "Fwd IAT Max": 52844686213120.0
+    },
+    "Queue_Drop": {
+      "Idle Max": 66683876147200.0,
+      "Idle Min": 58667755896832.0,
+      "Idle Mean": 63671006920704.0,
+      "Bwd IAT Mean": 54009398296576.0
+    },
+    "Normal_Traffic": {
+      "Flow IAT Max": 56375384211456.0
+    }
+  },
+  "scaler_mean": [
+    27356541.26000267,
+    4300661.929503206,
+    8908020.582835045,
+    9800528.86889531
+  ],
+  "scaler_scale": [
+    15452879.025093503,
+    9985315.86373665,
+    8360641.020357182,
+    7531744.59230366
+  ],
+  "node_order": [
+    "Burst_Duration",
+    "TCP_Timeout",
+    "Queue_Drop",
+    "Normal_Traffic"
+  ],
+  "adjacency": [
+    [
+      0.0,
+      1.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      1.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      1.0,
+      0.0
+    ]
+  ],
+  "source_path": "/kaggle/input/datasets/dhoogla/cicbotiot/CIC-BoT-IoT-V2.parquet",
+  "epochs": 20,
+  "batch_size": 64,
+  "learning_rate": 0.001,
+  "timing_repeats": 5,
+  "timing_max_samples": 100000,
+  "causal_gradient_importance": {
+    "Burst_Duration": 0.09758879244327545,
+    "TCP_Timeout": 0.13558536767959595,
+    "Queue_Drop": 0.03253593668341637,
+    "Normal_Traffic": 0.14159683883190155
+  },
+  "learned_alpha": 0.037142254412174225
+}

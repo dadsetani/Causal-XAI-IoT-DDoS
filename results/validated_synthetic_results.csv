@@ -1,0 +1,2 @@
+seed,n_samples,treatment,outcome,control_value,treatment_value,ate,refuted_ate,refutation_method,refutation_simulations,rf_f1
+42,2000,Burst_Duration,Attack_Label,0.0,1.0,0.14095033199079887,0.14094897285484356,random_common_cause,100,0.9224489795918367

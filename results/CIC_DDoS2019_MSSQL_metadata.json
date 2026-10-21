@@ -1,0 +1,101 @@
+{
+  "dataset": "CIC_DDoS2019_MSSQL",
+  "seed": 42,
+  "test_size": 0.2,
+  "validation_fraction_of_balanced_training": 0.1,
+  "raw_class_counts": {
+    "0": 2794,
+    "1": 5772992
+  },
+  "held_out_test_class_counts": {
+    "0": 559,
+    "1": 1154599
+  },
+  "balanced_training_class_counts_before_validation_split": {
+    "0": 2235,
+    "1": 2235
+  },
+  "selected_semantic_proxies": {
+    "Burst_Duration": "Flow Duration",
+    "TCP_Timeout": "Fwd IAT Max",
+    "Queue_Drop": "Idle Max",
+    "Normal_Traffic": "Flow IAT Max"
+  },
+  "training_variances_by_group": {
+    "Burst_Duration": {
+      "Flow Duration": 190098325504.0,
+      "Fwd IAT Total": 189537583104.0,
+      "Bwd IAT Total": 86641729536.0
+    },
+    "TCP_Timeout": {
+      "Bwd IAT Max": 23750293504.0,
+      "Fwd IAT Max": 109552295936.0
+    },
+    "Queue_Drop": {
+      "Idle Max": 105561186304.0,
+      "Idle Min": 99174064128.0,
+      "Idle Mean": 101225455616.0,
+      "Bwd IAT Mean": 642374848.0
+    },
+    "Normal_Traffic": {
+      "Flow IAT Max": 109693714432.0
+    }
+  },
+  "scaler_mean": [
+    5971.101068945606,
+    5143.575906997923,
+    3890.401382236354,
+    5176.485955155879
+  ],
+  "scaler_scale": [
+    436043.7325875396,
+    331026.5082889532,
+    324925.2213891447,
+    331240.8850114736
+  ],
+  "node_order": [
+    "Burst_Duration",
+    "TCP_Timeout",
+    "Queue_Drop",
+    "Normal_Traffic"
+  ],
+  "adjacency": [
+    [
+      0.0,
+      1.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      1.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      1.0,
+      0.0
+    ]
+  ],
+  "source_path": "/kaggle/input/datasets/rodrigorosasilva/cic-ddos2019-30gb-full-dataset-csv-files/03-11/MSSQL.csv",
+  "epochs": 20,
+  "batch_size": 64,
+  "learning_rate": 0.001,
+  "timing_repeats": 5,
+  "timing_max_samples": 100000,
+  "causal_gradient_importance": {
+    "Burst_Duration": 4.971224784851074,
+    "TCP_Timeout": 2.474424362182617,
+    "Queue_Drop": 1.503774642944336,
+    "Normal_Traffic": 4.968084335327148
+  },
+  "learned_alpha": 0.23230750858783722
+}

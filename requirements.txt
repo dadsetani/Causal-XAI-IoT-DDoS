@@ -1,6 +1,7 @@
-tensorflow>=2.10.0
-pandas>=1.5.0
-numpy>=1.23.0
-scikit-learn>=1.1.0
-matplotlib>=3.6.0
-dowhy>=0.8
+numpy==2.0.2
+pandas==2.3.3
+tensorflow==2.20.0
+scikit-learn==1.6.1
+xgboost==3.2.0
+dowhy==0.14
+pyarrow==24.0.0

@@ -1,0 +1,5 @@
+semantic_node,mean_absolute_input_gradient
+Normal_Traffic,0.14159683883190155
+TCP_Timeout,0.13558536767959595
+Burst_Duration,0.09758879244327545
+Queue_Drop,0.03253593668341637

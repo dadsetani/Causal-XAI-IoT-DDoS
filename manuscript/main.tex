@@ -1,0 +1,862 @@
+\documentclass[journal]{IEEEtran}
+
+% -----------------------------------------------------------------------------
+% IEEE Internet of Things Journal manuscript template
+% Current journal requirements to remember:
+%   1. Use the IEEE double-column journal format.
+%   2. Write a one-paragraph abstract of 150--250 words.
+%   3. Do not place citations or displayed equations in the abstract.
+%   4. Keep the manuscript concise; pages beyond the journal's free-page limit
+%      may incur mandatory over-length charges after publication.
+%   5. All authors need an ORCID for submission and proof review.
+% Replace every blue [placeholder] before submission.
+% -----------------------------------------------------------------------------
+
+% Core packages
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{url}
+
+% Load hyperref last.
+\usepackage[hidelinks]{hyperref}
+
+% Visible placeholders for drafting. Remove this command and all placeholders
+% before submission.
+\newcommand{\placeholder}[1]{\textcolor{blue}{\textit{[#1]}}}
+
+% Help LaTeX break common technical words correctly.
+\hyphenation{op-tical net-works semi-conduc-tor cyber-physical Fu-qa-ha
+Gui-za-ni Mo-ham-ma-di Aled-hari Ay-yash}
+
+% Left-aligned fixed-width table column that avoids stretched short entries.
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\begin{document}
+
+\title{Causal-Aware Explainable AI for Low-Rate DDoS Detection in Knowledge-Defined IoT Networks}
+
+\author{First~A.~Author,~\IEEEmembership{Student Member,~IEEE,}
+  Second~B.~Author,~\IEEEmembership{Member,~IEEE,}
+  and~Third~C.~Author,~\IEEEmembership{Senior Member,~IEEE}%
+  \thanks{First A. Author and Second B. Author are with the Department of
+    \placeholder{Department}, \placeholder{University}, \placeholder{City, Country}
+  (e-mail: \placeholder{author@university.edu}).}%
+  \thanks{Third C. Author is with \placeholder{Department and Institution},
+  \placeholder{City, Country} (e-mail: \placeholder{author@institution.edu}).}%
+\thanks{Corresponding author: \placeholder{Corresponding Author Name}.}}
+
+% IEEE adds the final volume, issue, and publication information after
+% acceptance. A draft running header may be enabled if needed:
+% \markboth{IEEE Internet of Things Journal,~Vol.~XX, No.~XX, Month~Year}%
+% {Author \MakeLowercase{\textit{et al.}}: Short Paper Title}
+
+\maketitle
+
+\begin{abstract}
+  Low-Rate Distributed Denial of Service (DDoS) attacks pose a difficult security challenge in Software-Defined Internet of Things (SDN-IoT) networks because carefully timed bursts can disrupt protocol and resource-recovery behavior without conspicuous traffic-volume anomalies. This paper presents a causal-aware explainable detection framework that integrates a Causal Knowledge Plane with a neural pipeline. A domain-informed Structural Causal Model represents the assumed progression from burst duration through TCP timeout and queue degradation to attack occurrence, while a learnable propagation layer embeds the corresponding predictor subgraph into the detector. In a controlled synthetic experiment, a random-forest reference classifier obtains an F1-score of 0.9224, and DoWhy estimates a positive burst-duration effect of 0.14095 that remains essentially unchanged under a random common-cause refutation (0.14095). Leakage-safe benchmark evaluations retain the natural class distributions of the held-out tests. On CIC-DDoS2019 MSSQL, the Causal-MLP obtains a balanced accuracy of 0.8431 and an ROC-AUC of 0.9069, matching the plain MLP at the decision threshold. On a third-party CICFlowMeter-derived Bot-IoT variant, it obtains a balanced accuracy of 0.9592, an F1-score of 0.9684, a false-positive rate of 0.0204, and a mean inference time of 0.0029~ms per flow. XGBoost achieves the strongest raw Bot-IoT performance, with balanced accuracy of 0.9727 and F1-score of 0.9812. The results show that the structural prior is explicit and adaptive, although it does not consistently improve predictive accuracy.
+\end{abstract}
+\begin{IEEEkeywords}
+  Internet of Things, Low-Rate DDoS, Causal AI, Explainable AI (XAI), Knowledge-Defined Networking, SDN-IoT Security, Reproducible Research.
+\end{IEEEkeywords}
+
+\section{Introduction}
+\label{sec:introduction}
+
+\IEEEPARstart{T}{he} Internet of Things (IoT) connects sensing, communication, computing, and control components across diverse application domains, enabling smart cities, industrial automation, and healthcare monitoring \cite{al-fuqaha2015iot}. To manage the complexity of these large-scale deployments, Software-Defined Networking (SDN) has been integrated with IoT architectures, offering centralized control and programmability. However, this convergence has significantly expanded the attack surface, making Knowledge-Defined IoT Networks prime targets for sophisticated cyber threats, particularly Distributed Denial of Service (DDoS) attacks \cite{yan2016sdn_ddos}. Among these, \textit{Low-Rate DDoS} (L-DDoS) attacks represent a critical challenge; unlike high-volume floods, they exploit protocol and resource-recovery dynamics using carefully timed bursts, thereby evading detectors that rely mainly on aggregate traffic volume \cite{kuzmanovic2003lowrate}.
+
+Deep Learning (DL) models have shown promise in detecting these subtle anomalies due to their ability to model complex temporal dependencies. Yet, standard DL approaches operate as "black boxes," providing predictions without transparent reasoning. In critical infrastructure, where automated mitigation actions are triggered by Intrusion Detection Systems (IDS), the lack of explainability poses a significant operational risk. Widely used post-hoc Explainable AI (XAI) methods include LIME and SHAP \cite{ribeiro2016lime,lundberg2017shap}. While useful, correlation-based explanations can be misleading in dynamic network environments where spurious features (e.g., timestamp artifacts) may correlate with attacks without being causally responsible. Causal representation learning offers a principled route for distinguishing stable mechanisms from environment-specific statistical associations \cite{scholkopf2021causalrep}.
+
+To address this gap, this paper proposes a \textbf{Causal-Aware Explainable AI Framework} for Low-Rate DDoS detection. We introduce a \textit{Causal Knowledge Plane (CKP)} that integrates a Structural Causal Model (SCM) directly into the deep learning pipeline. Unlike conventional models that treat input features as independent vectors, our architecture utilizes a learnable adjacency propagation layer to enrich features based on a domain-informed Directed Acyclic Graph (DAG) (e.g., modeling the causal chain: \textit{Burst Duration} $\rightarrow$ \textit{TCP Timeout} $\rightarrow$ \textit{Queue Drop}). This encourages the detector to combine statistical features according to an explicit and inspectable mechanism-level hypothesis. Furthermore, we employ the DoWhy framework \cite{sharma2020dowhy} to estimate the specified causal effect and assess its stability under refutation tests.
+
+The main contributions of this work are summarized as follows:
+\begin{itemize}
+  \item We propose a novel Causal Knowledge Plane architecture
+    that embeds structural causal priors into a neural detection
+    model through a learnable causal propagation layer, distinguishing
+    it from prior black-box or purely correlation-based XAI approaches
+    in IoT security.
+  \item We provide a controlled causal consistency analysis using the DoWhy framework, estimating a positive effect of the encoded burst-duration treatment on the synthetic attack-state outcome (ATE = 0.14095) and obtaining an effectively unchanged estimate (0.14095) under a random common-cause refutation.
+  \item We evaluate the framework using controlled synthetic data, the public
+    CIC-DDoS2019 MSSQL subset \cite{sharafaldin2019cicddos}, and a
+    third-party CICFlowMeter-derived Bot-IoT variant
+    \cite{koroniotis2019botiot,dhooge2026cicbotiot}. On untouched,
+    naturally imbalanced test partitions, the Causal-MLP achieves balanced
+    accuracies of \textbf{84.31\%} and \textbf{95.92\%}, respectively,
+    while retaining an explicit causal interpretation layer.
+    The implementation and experimental artifacts are available through
+    GitHub and Zenodo
+    \cite{our_github_repository,our_zenodo_archive}.
+\end{itemize}
+
+The remainder of this paper is organized as follows. Section~\ref{sec:related} reviews related work in IoT security and Causal AI. Section~\ref{sec:system_model} defines the system model and problem formulation. Section~\ref{sec:proposed_method} presents the proposed Causal-Aware architecture and the Knowledge Plane design. Section~\ref{sec:experimental_methodology} describes the evaluation setup, including datasets and metrics. Section~\ref{sec:results} discusses the experimental results and causal analysis. Finally, Section~\ref{sec:conclusion} concludes the paper and outlines future research directions.
+
+\section{Related Work}
+\label{sec:related}
+
+This section reviews the state-of-the-art in IoT security, explainable artificial intelligence, and causal learning, highlighting the limitations of existing approaches and positioning our proposed framework within the current literature.
+
+\subsection{Deep Learning for Low-Rate DDoS Detection in IoT}
+
+Machine- and deep-learning methods have been widely studied for IoT security \cite{algaradi2020iotsecurity}. Conventional classifiers can detect consumer-IoT DDoS activity from compact traffic statistics \cite{doshi2018ml_iot_ddos}, while DeepDefense demonstrated that CNN- and recurrent-network architectures can learn discriminative DDoS representations directly from traffic sequences \cite{yuan2017deepdefense}.
+
+Hybrid deep-learning frameworks subsequently combined complementary feature and sequence learners for anomaly detection in IoT networks \cite{ullah2021hybrid}. The CIC-DDoS2019 testbed and flow-level dataset provide a reproducible benchmark covering multiple DDoS families \cite{sharafaldin2019cicddos}. However, these predictive models generally remain opaque: they identify malicious traffic without representing whether the learned associations correspond to the underlying attack mechanism. This limitation is consequential in Knowledge-Defined Networking (KDN), where mitigation decisions may be executed autonomously by the control plane.
+
+\subsection{Post-Hoc Explainability vs. Causal Reasoning}
+
+To address the opacity of DL models, the dominant XAI paradigm relies on \textit{post-hoc} methods such as LIME and SHAP \cite{ribeiro2016lime,lundberg2017shap}. These methods approximate a complex predictor locally or assign importance scores to features based on their contribution to the prediction output.
+
+However, statistical importance does not imply causation. A model can rely on dataset-specific timing artifacts rather than the mechanism that exhausts the victim's resources. Post-hoc explainers can also be manipulated or produce plausible explanations for deliberately biased models \cite{slack2020fooling}, motivating calls for intrinsically interpretable designs in high-stakes settings \cite{rudin2019stop}. Attention-based IDS models can visualize influential features and traffic slices \cite{liu2020hierarchical}, but attention weights alone do not establish causal effects. This motivates embedding explicit structural assumptions into the learning and validation process.
+
+\subsection{Causal AI and Knowledge-Defined Networking}
+
+Causal analysis has already been applied to networking and operational diagnosis. PicoSDN uses provenance-informed causal reasoning across SDN control and data planes for attack investigation \cite{ujcich2021causal_sdn}, while CIRCA uses a Causal Bayesian Network to identify root-cause indicators in online service systems \cite{li2022circa}. Toolkits such as DoWhy support explicit causal graphs, identification, estimation, and refutation tests \cite{sharma2020dowhy}.
+
+The Knowledge Plane vision introduced an intelligent layer that maintains models of network goals and behavior \cite{clark2003knowledgeplane}; KDN later combined this idea with SDN, network analytics, and machine learning \cite{mestres2017kdn}. Causal security research is also emerging: Zeng \textit{et al.} proposed causal reasoning to reduce false associations in DDoS detection \cite{zeng2022causal_ddos}, and IR-IDS uses causal feature selection with an explainable classifier \cite{gao2025irids}. These studies establish the relevance of causality, but they do not combine a domain-authored attack DAG, differentiable causal propagation, and independent effect refutation in a KDN architecture.
+
+\textbf{Positioning of Our Work:} Relative to causal-reasoning IDS
+\cite{zeng2022causal_ddos} and causal feature-selection approaches
+\cite{gao2025irids}, our work embeds a \textbf{Causal Knowledge Plane}
+directly into the neural architecture. Rather than explaining predictions
+only after inference, it constrains feature propagation using a
+domain-informed DAG (Burst $\rightarrow$ TCP $\rightarrow$ Queue). We
+evaluate the framework through controlled causal analysis and two
+complementary flow-level benchmarks. The leakage-safe evaluation yields
+balanced accuracies of 84.31\% on CIC-DDoS2019 MSSQL and 95.92\% on the
+CIC-BoT-IoT variant. DoWhy refutation is used to assess the stability of the
+estimated synthetic causal effect (0.1410), and the implementation artifacts are available through
+GitHub and Zenodo
+\cite{our_github_repository,our_zenodo_archive}.
+
+\section{System Model and Problem Formulation}
+\label{sec:system_model}
+
+This section defines the network setting, threat model, traffic representation, and learning objective considered in this study. The focus is on Low-Rate DDoS detection in Knowledge-Defined IoT networks, where traffic observations are collected from an SDN-enabled infrastructure and analyzed through a knowledge-guided detection pipeline. The purpose of this section is to formalize the problem before presenting the proposed causal-aware framework in Section~\ref{sec:proposed_method}.
+
+\subsection{Knowledge-Defined SDN-IoT Architecture}
+\label{subsec:kdn_sdn_iot_architecture}
+
+We consider a Knowledge-Defined IoT network built on top of an SDN-enabled communication infrastructure. The network consists of heterogeneous IoT devices, SDN forwarding elements, a logically centralized controller, and a Knowledge Plane that supports security-oriented reasoning and decision making \cite{mestres2017kdn}.
+
+The IoT layer includes resource-constrained devices such as sensors, actuators, smart appliances, and edge-connected monitoring nodes. These devices generate diverse traffic patterns, including periodic telemetry, event-triggered messages, and bursty communication behavior. Due to their limited computational resources and heterogeneous configurations, IoT devices are often vulnerable to compromise and may be recruited as attack sources in distributed denial-of-service scenarios.
+
+The SDN data plane consists of programmable forwarding devices, such as OpenFlow-enabled switches, that forward packets according to rules installed by the SDN controller \cite{mckeown2008openflow}. Packet and byte counters exposed by these devices can be combined with derived measurements, including flow duration and inter-arrival characteristics, to form the traffic representation used by the intrusion detection process.
+
+The SDN control plane provides centralized visibility and programmability. It collects network measurements, installs forwarding rules, and can support mitigation actions such as flow blocking, rate limiting, or traffic redirection. However, this centralization also makes the control infrastructure a critical target: if malicious flows are not detected early, they may degrade network resources or overload control-plane functions \cite{yan2016sdn_ddos}.
+
+In the considered architecture, the Knowledge Plane complements the SDN controller by maintaining higher-level knowledge about network behavior, traffic patterns, and attack mechanisms. Instead of relying only on raw statistical features, the Knowledge Plane provides a structured representation of domain knowledge that can guide the detection model. In this paper, this knowledge is represented through a causal graph describing the expected mechanism of Low-Rate DDoS behavior.
+
+Thus, the proposed setting combines SDN-based observability with knowledge-driven reasoning. Flow-level measurements are collected from the network, transformed into feature representations, and analyzed by a causal-aware detection framework. The output of the detection process can then support security analysis and, in future online deployments, mitigation decisions within the SDN control plane.
+
+\subsection{Low-Rate DDoS Threat Model}
+\label{subsec:threat_model}
+
+This study focuses on Low-Rate Distributed Denial-of-Service (L-DDoS) attacks against SDN-enabled IoT networks. Unlike high-volume DDoS attacks, which attempt to overwhelm the victim by continuously generating large traffic volumes, L-DDoS attacks use intermittent and carefully timed bursts. Their average traffic rate may remain close to normal background traffic, making them difficult to detect using simple rate-based thresholds \cite{kuzmanovic2003lowrate}.
+
+The attacker is assumed to control a set of compromised IoT devices or edge-connected nodes. These bots generate malicious traffic toward a target service, server, or network function. The attack traffic is coordinated in such a way that short bursts are injected periodically or semi-periodically, creating resource pressure without producing a sustained high-volume flood. This behavior is consistent with stealthy attacks that attempt to evade volume-based intrusion detection mechanisms.
+
+In the considered SDN-IoT setting, the attack may affect both data-plane and control-plane behavior. At the data plane, bursty traffic can increase packet queuing, flow-table pressure, or packet loss. At the transport layer, repeated bursts may interfere with normal TCP behavior by increasing timeout events and disrupting congestion-control dynamics \cite{kuzmanovic2003lowrate}. At the control plane, suspicious or unstable flows may increase monitoring and rule-management overhead if they are not detected and handled efficiently.
+
+The victim can be an IoT gateway, edge service, application server, or SDN-managed network function. The attack goal is not necessarily to saturate the entire network link, but to degrade service availability by exploiting timing, protocol behavior, and resource-recovery mechanisms. Therefore, the observable effect of the attack may appear through indirect indicators such as timeout behavior, queue degradation, or abnormal flow statistics rather than through traffic volume alone.
+
+The defender is assumed to have access to flow-level measurements collected from the SDN-enabled infrastructure. These measurements are used for detection, but the defender does not directly observe the internal intention of the attacker. The detection problem is therefore to infer whether a flow-level observation corresponds to benign or malicious behavior, while also providing an explanation that is consistent with the expected attack mechanism.
+
+This threat model motivates the need for a mechanism-aware detection approach. Since L-DDoS attacks can resemble legitimate bursty traffic at the aggregate level, a purely correlation-based classifier may identify discriminative patterns without clarifying whether those patterns correspond to the underlying attack process. The causal-aware framework proposed in this paper addresses this issue by incorporating domain knowledge about burst behavior, timeout events, queue degradation, and attack occurrence.
+
+\subsection{Traffic Representation}
+\label{subsec:traffic_representation}
+
+Network observations in this study are represented at the flow level. A flow refers to a group of packets that share common communication attributes, such as source and destination addresses, transport protocol, and port information, within a given observation interval. Instead of analyzing individual packets directly, the detection process relies on statistical flow records extracted from network traffic.
+
+Each observed flow $f_i$ is initially represented by a raw numerical feature
+vector $\mathbf{z}_i \in \mathbb{R}^{p}$. A dataset-specific mapping
+$\phi: \mathbb{R}^{p} \rightarrow \mathbb{R}^{4}$ then constructs the
+four-dimensional semantic proxy vector
+\[
+  \mathbf{x}_i = \phi(\mathbf{z}_i)
+  = [x_i^{B},x_i^{T},x_i^{Q},x_i^{N}],
+\]
+where the components correspond to burst duration, TCP timeout, queue
+degradation, and normal-traffic context, respectively. The candidate
+flow-level measurements used to construct these proxies include duration,
+idle-time, and inter-arrival-time statistics. The corresponding label is
+denoted by $y_i \in \{0,1\}$, where $y_i = 0$ represents benign traffic and
+$y_i = 1$ represents attack traffic. The supervised detection dataset is
+therefore defined as
+\[
+  \mathcal{D} = \{(\mathbf{x}_i, y_i)\}_{i=1}^{N},
+\]
+with $\mathbf{x}_i \in \mathbb{R}^{4}$. The mapping $\phi$ is fitted using
+training data only, as detailed in Section~\ref{sec:experimental_methodology}.
+
+This representation is consistent with benchmark intrusion detection datasets such as CIC-DDoS2019, where each record summarizes the statistical behavior of a network flow \cite{sharafaldin2019cicddos}. Since such records are flow-level observations, they do not necessarily preserve continuous packet-level temporal dependencies. Therefore, the detection task in this paper is formulated as flow-level binary classification rather than packet-sequence prediction.
+
+In addition to statistical flow features, the proposed framework uses semantic causal variables to represent the assumed mechanism of Low-Rate DDoS behavior. These variables include \textit{Burst\_Duration}, \textit{TCP\_Timeout}, \textit{Queue\_Drop}, \textit{Normal\_Traffic}, and \textit{Attack\_Label}. They describe mechanism-level concepts rather than merely independent numerical attributes. In particular, they express how bursty traffic may contribute to timeout behavior, queue degradation, and attack occurrence.
+
+This distinction is important for the proposed causal-aware framework. Statistical flow features provide the numerical input for detection, while semantic causal variables provide the structural interpretation used by the Causal Knowledge Plane. As a result, the framework can operate on flow-level traffic records while still connecting its detection decisions to a higher-level causal explanation of Low-Rate DDoS behavior.
+
+\subsection{Problem Formulation}
+\label{subsec:problem_formulation}
+
+Given a set of semantic flow representations $\mathcal{D} = \{(\mathbf{x}_i, y_i)\}_{i=1}^{N}$, the objective is to learn a detection function
+\[
+  h_{\theta}: \mathbb{R}^{4} \rightarrow [0,1],
+\]
+where $h_{\theta}(\mathbf{x}_i)$ represents the predicted probability that flow $f_i$ belongs to the attack class. A decision threshold $\tau$ can then be applied to assign the final class label:
+\[
+  \hat{y}_i =
+  \begin{cases}
+    1, & h_{\theta}(\mathbf{x}_i) \geq \tau, \\
+    0, & h_{\theta}(\mathbf{x}_i) < \tau.
+  \end{cases}
+\]
+
+In a conventional supervised learning setting, the model parameters $\theta$ are learned by minimizing a classification loss over the training data. For binary attack detection, this objective can be written as
+\[
+  \min_{\theta} \frac{1}{N} \sum_{i=1}^{N}
+  \mathcal{L}\left(h_{\theta}(\mathbf{x}_i), y_i\right),
+\]
+where $\mathcal{L}(\cdot)$ denotes the binary cross-entropy loss.
+
+However, minimizing classification error alone does not ensure that the learned decision process is aligned with the underlying mechanism of Low-Rate DDoS behavior. A model may achieve high predictive accuracy by exploiting dataset-specific correlations that do not correspond to the causal process responsible for attack occurrence. This limitation is particularly important in Knowledge-Defined IoT networks, where detection outputs may support security analysis or mitigation decisions.
+
+Therefore, the problem addressed in this paper is not only to learn an accurate classifier, but to learn a detection function whose decision process is informed by causal domain knowledge. Let $\mathcal{G} = (\mathcal{V}, \mathcal{E})$ denote a causal graph in which nodes represent semantic traffic concepts and directed edges represent assumed causal relations among them. The goal is to incorporate the structural information in $\mathcal{G}$ into the detection pipeline so that the learned representation is both predictive and mechanism-aware.
+
+The proposed framework, introduced in Section~\ref{sec:proposed_method}, addresses this problem by integrating a Causal Knowledge Plane with a neural detection model. The Knowledge Plane encodes the assumed causal structure of Low-Rate DDoS behavior, while the detection model uses this structure to enrich flow-level feature representations before classification. This formulation allows the system to evaluate traffic flows not only according to statistical separability, but also according to their consistency with the expected causal attack mechanism.
+
+\section{Proposed Method: Causal-Aware Explainable Framework}
+\label{sec:proposed_method}
+
+This section presents the proposed causal-aware explainable framework for Low-Rate DDoS detection in Knowledge-Defined IoT networks. Building on the system model defined in Section~\ref{sec:system_model}, the proposed method integrates causal domain knowledge into a neural detection pipeline. The central idea is to represent the expected attack mechanism as a causal structure and use this structure to guide feature propagation before classification.
+
+The framework consists of four main components. First, a Causal Knowledge Plane encodes domain knowledge about Low-Rate DDoS behavior using a directed causal graph. Second, the graph is converted into an adjacency structure that defines how causal information is propagated among mechanism-level variables. Third, a learnable causal propagation layer enriches the input representation according to this structure. Finally, a neural detection backbone classifies each flow as benign or malicious, while causal validation and explanation tools are used to examine whether the learned behavior is consistent with the assumed attack mechanism.
+
+Unlike conventional black-box intrusion detection models, the proposed framework does not treat all input variables as unrelated statistical attributes. Instead, it explicitly models the relationships among burst behavior, TCP timeout, queue degradation, background traffic, and attack occurrence. This design allows the model to combine predictive learning with mechanism-aware interpretation.
+
+\subsection{Overview of the Proposed Framework}
+\label{subsec:framework_overview}
+
+The overall workflow of the proposed framework begins with flow-level traffic observations collected from the SDN-enabled IoT environment. These observations are transformed into numerical feature representations and provided to the detection pipeline. In parallel, the Knowledge Plane maintains a causal representation of the Low-Rate DDoS mechanism. This causal representation acts as a structural prior that guides how information is propagated before the final classification step.
+
+At a high level, the proposed framework can be described as follows. Given a
+four-dimensional semantic proxy vector $\mathbf{x}_i$, the Causal Knowledge
+Plane provides an input-node adjacency matrix $\mathbf{A}_{X}$ derived from
+the predictor subgraph. A learnable causal propagation layer then produces an
+enriched representation $\tilde{\mathbf{x}}_i$ by combining the original
+proxies with information propagated through $\mathbf{A}_{X}$. The enriched
+representation is passed to the neural detection backbone, which outputs the
+probability of the flow belonging to the attack class. The ground-truth label
+is never included in the detector input.
+
+The framework is designed to separate three roles that are often merged in conventional intrusion detection models. The traffic features provide the observable evidence, the causal graph provides the mechanism-level structure, and the neural classifier provides the predictive decision function. This separation makes the detection pipeline more transparent because the structural assumptions used by the model are explicitly defined rather than hidden inside learned parameters.
+
+The proposed method also includes a causal validation stage. After defining the causal graph, the DoWhy framework is used to estimate the causal effect of burst-related behavior on the attack outcome and to perform refutation analysis \cite{sharma2020dowhy}. This stage does not replace predictive evaluation; rather, it complements classification results by assessing whether the estimated effect is consistent with the assumed mechanism and remains stable under the selected refutation within the experimental setting.
+
+The overall architecture of the proposed framework is illustrated in
+Fig.~\ref{fig:framework}.
+
+\begin{figure*}[!t]
+  \centering
+  \includegraphics[width=0.98\textwidth]{Framework.pdf}
+  \caption{Overall architecture of the proposed causal-aware explainable detection framework. Flow-level SDN-IoT traffic features are mapped to semantic proxies and enriched through a causal propagation layer guided by the Causal Knowledge Plane. In the full validation DAG, Burst, TCP, Queue, and Attack denote \textit{Burst\_Duration}, \textit{TCP\_Timeout}, \textit{Queue\_Drop}, and \textit{Attack\_Label}, respectively. The detector propagates information only among the four non-outcome input nodes; the attack label is predicted by the Causal-MLP and is not supplied as an input. Causal effect estimation, refutation-based sensitivity analysis, and saliency-based explanation support mechanism-aware interpretation.}
+  \label{fig:framework}
+\end{figure*}
+
+\subsection{Causal Knowledge Plane}
+\label{subsec:causal_knowledge_plane}
+
+The Causal Knowledge Plane is the component responsible for representing domain knowledge about the expected Low-Rate DDoS mechanism. Instead of relying only on statistical correlations learned from traffic data, the Knowledge Plane encodes a structural view of how bursty attack behavior can influence protocol behavior, queue degradation, and attack occurrence.
+
+In this paper, the causal structure is represented as a Directed Acyclic Graph
+(DAG). The DAG contains five mechanism-level
+variables. \textit{Burst\_Duration} captures burst behavior, while
+\textit{TCP\_Timeout} and \textit{Queue\_Drop} describe protocol and queue
+degradation. \textit{Normal\_Traffic} represents background load, and
+\textit{Attack\_Label} denotes the detection outcome. Thus, the variables
+encode semantic concepts associated with Low-Rate DDoS behavior rather than
+arbitrary statistical features.
+
+The causal DAG used by the Knowledge Plane is shown in
+Fig.~\ref{fig:causal_dag}. The graph was specified and checked using DAGitty
+for causal graph modeling and adjustment-set analysis \cite{textor2016dagitty},
+and then redrawn in an IEEE-style format for presentation.
+
+The causal graph contains the following directed relations:
+\[
+  \begin{aligned}
+    &\textit{Burst\_Duration} \rightarrow \textit{TCP\_Timeout},\\
+    &\textit{TCP\_Timeout} \rightarrow \textit{Queue\_Drop},\\
+    &\textit{Queue\_Drop} \rightarrow \textit{Attack\_Label},\\
+    &\textit{Burst\_Duration} \rightarrow \textit{Attack\_Label},\\
+    &\textit{Normal\_Traffic} \rightarrow \textit{Queue\_Drop},\\
+    &\textit{Normal\_Traffic} \rightarrow \textit{Attack\_Label}.
+  \end{aligned}
+\]
+
+This structure captures both direct and indirect relations between burst
+behavior and the binary attack-state outcome. The indirect path represents the
+hypothesis that bursty traffic increases timeout behavior, which contributes
+to queue degradation before the attack state is observed. The direct edge
+from \textit{Burst\_Duration} to \textit{Attack\_Label} permits an effect that
+is not fully mediated by the two intermediate variables. Here,
+\textit{Attack\_Label} operationalizes the binary attack state in the
+synthetic SCM and subsequently serves as the supervised target; it is not
+treated as a directly measured physical degradation variable.
+
+The full five-node DAG is used for causal effect identification and
+refutation. For predictive propagation, the framework uses the induced
+subgraph over the four non-outcome variables: \textit{Burst\_Duration},
+\textit{TCP\_Timeout}, \textit{Queue\_Drop}, and
+\textit{Normal\_Traffic}. Its adjacency matrix is denoted by
+$\mathbf{A}_{X}\in\mathbb{R}^{4\times4}$. For the row-vector convention used
+below, $(A_X)_{jk}=1$ indicates a directed relation from input node $j$ to
+input node $k$. This separation prevents label information from entering the
+detector while retaining the mechanism-level prior among observable proxies.
+
+The purpose of the Causal Knowledge Plane is not to claim that the proposed graph is universally valid for all DDoS attacks. Rather, it provides an explicit and inspectable causal hypothesis for the Low-Rate DDoS scenario considered in this study. This hypothesis is later evaluated through causal effect estimation and refutation analysis, as described in Section~\ref{subsec:causal_validation_protocol}.
+
+\subsection{Learnable Causal Propagation Layer}
+\label{subsec:causal_propagation_layer}
+
+To integrate the causal structure into the detection pipeline, the predictor
+subgraph encoded in the Causal Knowledge Plane is transformed into the
+adjacency matrix $\mathbf{A}_{X}$. Rather than using the graph only as an
+external explanation, the proposed framework injects this input-node
+structure into the semantic proxy representation through a learnable causal
+propagation layer.
+
+Let $\mathbf{x}_i \in \mathbb{R}^{4}$ denote the semantic proxy vector for
+flow $f_i$, and let $\mathbf{A}_{X} \in \mathbb{R}^{4 \times 4}$ denote the
+adjacency matrix of the four-node predictor subgraph. The causal propagation
+layer computes an enriched representation $\tilde{\mathbf{x}}_i$ as follows:
+\[
+  \tilde{\mathbf{x}}_i
+  = \mathbf{x}_i + \alpha(\mathbf{x}_i \mathbf{A}_{X}),
+\]
+where $\alpha$ is a learnable scalar parameter that controls the strength of causal propagation.
+
+The first term, $\mathbf{x}_i$, preserves the semantic proxy information. The
+second term, $\alpha(\mathbf{x}_i \mathbf{A}_{X})$, propagates information
+according to the input-node dependencies defined in the Knowledge Plane. In
+this way, the enriched representation combines observed traffic proxies with
+the structural prior provided by the predictor subgraph.
+
+The parameter $\alpha$ allows the model to adjust the influence of the causal structure during training. If the causal propagation is useful for the detection task, the model can retain or increase its contribution. If the structural prior is less informative for a particular dataset, the learned parameter can reduce its effect. This makes the causal prior flexible rather than strictly imposed.
+
+This layer provides a simple mechanism for embedding causal knowledge into a neural classifier. It does not replace data-driven learning; instead, it guides the representation before classification. As a result, the model can learn from observed traffic data while remaining connected to the causal assumptions defined by the Knowledge Plane.
+
+\subsection{Neural Detection Backbone}
+\label{subsec:neural_detection_backbone}
+
+The enriched representation produced by the causal propagation layer is passed to a neural detection backbone for binary classification. Since the traffic records considered in this study are represented as flow-level statistical observations, a Multi-Layer Perceptron (MLP) is used as the detection backbone. This choice is suitable for structured tabular flow features and allows the contribution of the causal propagation layer to remain explicit.
+
+Given the enriched feature vector $\tilde{\mathbf{x}}_i$, the detection backbone computes hidden representations through fully connected layers with dropout regularization \cite{srivastava2014dropout}:
+\[
+  \mathbf{h}_1 = \mathrm{ReLU}(\mathbf{W}_1\tilde{\mathbf{x}}_i + \mathbf{b}_1),
+\]
+\[
+  \mathbf{h}_2 = \mathrm{ReLU}(\mathbf{W}_2\mathrm{Dropout}(\mathbf{h}_1) + \mathbf{b}_2).
+\]
+
+The final output layer uses a sigmoid activation function to estimate the probability that the input flow belongs to the attack class:
+\[
+  \hat{y}_i = \sigma(\mathbf{w}_3^{T}\mathbf{h}_2 + b_3).
+\]
+
+Here, $\hat{y}_i \in [0,1]$ represents the predicted attack probability for flow $f_i$. A value closer to 1 indicates a higher likelihood of Low-Rate DDoS behavior, while a value closer to 0 indicates benign traffic.
+
+The model is trained by minimizing the binary cross-entropy loss between the predicted probability $\hat{y}_i$ and the ground-truth label $y_i$. The classification objective is defined as
+\[
+  \mathcal{L}_{BCE}
+  =
+  -\frac{1}{N}\sum_{i=1}^{N}
+  \left[
+    y_i \log(\hat{y}_i) + (1-y_i)\log(1-\hat{y}_i)
+  \right].
+\]
+
+The role of the MLP backbone is to learn discriminative decision boundaries from the enriched flow-level representation. The causal component is therefore not a replacement for neural learning; rather, it modifies the representation supplied to the classifier so that the prediction process is informed by the causal structure encoded in the Knowledge Plane.
+
+\subsection{Causal Validation and Explanation}
+\label{subsec:causal_validation_explanation}
+
+The proposed framework includes a causal validation and explanation stage to examine whether the estimated effect is consistent with the assumptions encoded in the Knowledge Plane and whether the mechanism-level representation is useful for interpreting detection decisions. This stage complements the predictive classifier by analyzing variables associated with the hypothesized Low-Rate DDoS behavior.
+
+Causal validation is performed using the DoWhy framework
+\cite{sharma2020dowhy}. Given the full five-node graph defined in the
+Knowledge Plane, DoWhy is used to identify an estimand, estimate the specified
+effect, and apply refutation tests. The treatment is
+\textit{Burst\_Duration}, and the binary outcome is
+\textit{Attack\_Label}. The variable \textit{Normal\_Traffic} is modeled as
+a background context covariate that affects queue conditions and the observed
+attack state. Because the specified graph does not include an edge from
+\textit{Normal\_Traffic} to the treatment, it is not interpreted as an
+observed common cause of treatment and outcome.
+
+The causal effect is expressed as an Average Treatment Effect (ATE) contrast
+under the intervention notation of structural causal models
+\cite{pearl2009causality}:
+\[
+  ATE(t_1,t_0)
+  = \mathbb{E}[Y \mid do(T=t_1)]
+  - \mathbb{E}[Y \mid do(T=t_0)],
+\]
+where $T$ denotes the encoded burst-duration treatment and $Y$ denotes the
+binary attack-state outcome. The reported estimate uses the unit contrast
+$t_1=1$ versus $t_0=0$ in the synthetic treatment encoding. Thus, the value
+represents the expected outcome change for that specified contrast rather
+than a universal effect for every possible burst duration.
+
+To examine the stability of the estimated causal effect, the framework applies causal refutation analysis. In particular, a random common cause refutation test can be used to check whether the estimated effect changes substantially when an additional randomly generated confounder is introduced. A stable estimate under this test provides support for the internal consistency of the assumed causal mechanism under the evaluated setting.
+
+For local explanation of model decisions, the framework can compute gradient-based saliency scores with respect to the enriched input representation \cite{simonyan2014saliency}. For a given prediction $\hat{y}_i$, the importance of feature $j$ can be estimated as
+\[
+  S_j = \left| \frac{\partial \hat{y}_i}{\partial \tilde{x}_{ij}} \right|.
+\]
+A larger value of $S_j$ indicates that the prediction is more sensitive to changes in the corresponding enriched feature. These saliency scores help identify which mechanism-level variables contribute most strongly to a detection decision.
+
+The purpose of this stage is not to claim universal causal validity for a single graph across all network environments. Rather, it provides an explicit procedure for testing and interpreting the causal assumptions used by the Knowledge Plane. In Knowledge-Defined IoT networks, such explanations can help operators understand whether an alert is associated with plausible attack mechanisms such as burst-induced timeout behavior or queue degradation, rather than with opaque statistical correlations alone.
+
+\begin{figure}[!t]
+  \centering
+  \includegraphics[width=0.9\linewidth]{IEEE_Straight_DAG.pdf}
+  \caption{Full causal DAG used for effect estimation and refutation. Burst duration affects the binary attack-state outcome directly and indirectly through TCP timeout and queue drop, while normal traffic is modeled as a background context variable affecting queue conditions and the outcome.}
+  \label{fig:causal_dag}
+\end{figure}
+
+\section{Experimental Methodology}
+\label{sec:experimental_methodology}
+
+This section describes the experimental procedure used to evaluate the proposed causal-aware explainable detection framework introduced in Section IV. The evaluation is designed to examine two complementary aspects of the proposed approach: first, whether the hypothesized mechanism yields a measurable effect that is stable under the selected refutation in the controlled setting; and second, whether the proposed detection model can achieve reliable classification performance on benchmark flow-level DDoS traffic.
+
+The experiments were conducted in three stages. In the first stage, a
+controlled synthetic IoT traffic scenario was used to examine the assumed
+causal mechanism among burst behavior, TCP timeout, queue degradation, and
+attack occurrence under known structural conditions. In the second stage,
+the proposed framework was evaluated on the MSSQL subset of CIC-DDoS2019 to
+assess its detection capability using benchmark flow-level traffic
+\cite{sharafaldin2019cicddos}. In the third stage, an IoT-focused evaluation
+was performed on a publicly distributed, third-party CICFlowMeter-derived
+variant of Bot-IoT to assess the consistency of the observed predictive
+behavior on a second benchmark with a compatible feature schema
+\cite{koroniotis2019botiot,dhooge2026cicbotiot}.
+
+Unlike purely accuracy-oriented intrusion detection studies, the purpose of the evaluation is not limited to reporting classification performance. The experimental methodology also examines whether the proposed causal structure contributes to a more interpretable and causally aligned decision process. Therefore, the evaluation includes both predictive metrics, such as accuracy and F1-score, and causal validation indicators, including the estimated Average Treatment Effect (ATE) and refutation analysis.
+
+\subsection{Experimental Objective}
+
+The main objective of the experimental evaluation is to determine whether incorporating causal domain knowledge into the detection pipeline can support reliable and explainable Low-Rate DDoS detection in Knowledge-Defined IoT networks. In particular, the experiments are designed to answer the following research questions:
+
+\begin{itemize}
+  \item \textbf{RQ1:} Does the assumed causal mechanism of Low-Rate DDoS behavior produce a measurable causal effect on the attack outcome?
+  \item \textbf{RQ2:} Can the proposed causal-aware model achieve reliable detection performance across complementary benchmark flow-level DDoS datasets?
+  \item \textbf{RQ3:} Does the causal component provide an explicit mechanism-level interpretation beyond a non-causal predictive baseline?
+\end{itemize}
+
+The first research question is addressed through a synthetic causal
+validation experiment using a structural causal model and the DoWhy
+framework. The second research question is examined through supervised binary
+classification on the CIC-DDoS2019 MSSQL and CIC-BoT-IoT benchmarks. The
+third research question is evaluated by comparing the proposed causal-aware
+model with a non-causal MLP under matched preprocessing and training
+conditions and, for CIC-BoT-IoT, with a strong tree-based baseline.
+
+This experimental design reflects the central claim of the paper: the proposed framework is not intended merely to increase detection accuracy, but to integrate causal knowledge into the learning process so that detection decisions become more transparent, mechanism-aware, and suitable for security analysis in Knowledge-Defined IoT environments.
+
+\subsection{Dataset and Traffic Representation}
+
+The experimental evaluation uses three complementary traffic sources: a
+controlled synthetic IoT traffic dataset, the MSSQL subset of CIC-DDoS2019,
+and a third-party CICFlowMeter-derived variant of Bot-IoT. The synthetic dataset is
+used to examine the causal assumptions encoded in the proposed Causal
+Knowledge Plane under a known structural mechanism. CIC-DDoS2019 provides a
+public flow-level DDoS benchmark, whereas the CICFlowMeter Bot-IoT variant
+provides an additional IoT-focused benchmark with a compatible statistical
+feature schema. The two benchmark evaluations are used to assess predictive
+performance within their respective traffic distributions; they are not
+treated as a cross-dataset transfer experiment.
+
+The synthetic dataset was generated according to the causal mechanism described in Section IV. It includes five variables: \textit{Burst\_Duration}, \textit{TCP\_Timeout}, \textit{Queue\_Drop}, \textit{Normal\_Traffic}, and \textit{Attack\_Label}. The first three variables represent the assumed attack progression in a Low-Rate DDoS scenario, where bursty malicious behavior may increase TCP timeout events and subsequently contribute to queue degradation. The variable \textit{Normal\_Traffic} represents background context that affects queue conditions and the observed binary attack state. The variable \textit{Attack\_Label} operationalizes that outcome and is also used as the supervised benign/attack target.
+
+The synthetic traffic source is not intended to replace real network data. Rather, it provides a controlled setting in which the causal effect of burst dynamics on attack occurrence can be estimated and refuted. This is important because causal validation requires an explicit structural assumption that cannot always be directly verified from benchmark traffic alone.
+
+For benchmark-data evaluation, the MSSQL subset of the CIC-DDoS2019 dataset was used \cite{sharafaldin2019cicddos}. CIC-DDoS2019 is a public benchmark dataset containing benign traffic and multiple categories of DDoS attacks generated in a controlled network environment. The MSSQL subset was selected as a representative flow-level attack scenario for evaluating the proposed detection framework on benchmark traffic records. Each record consists of statistical features extracted from a network flow and a corresponding traffic label.
+The complete evaluated MSSQL file contained 2,794 benign records and
+5,772,992 attack records. This severe class skew motivates reporting
+class-balanced and false-positive-sensitive metrics in addition to accuracy
+and attack-class F1-score.
+
+To extend the evaluation to an IoT-focused benchmark while preserving
+feature-schema consistency with CIC-DDoS2019, we used the publicly distributed
+CIC-BoT-IoT V2 Parquet release \cite{dhooge2026cicbotiot}. This is a
+third-party alternative representation of the original Bot-IoT dataset whose
+data card describes the features as CICFlowMeter-derived. The original
+Bot-IoT release provides PCAP captures together with Argus-derived flow
+records \cite{koroniotis2019botiot}. The present study did not independently
+re-extract those PCAP files and therefore does not attribute a specific flow
+timeout or activity-timeout configuration to the authors' pipeline. The
+evaluated Parquet file contains 38,435 benign records and 11,465,121 attack
+records. Duration, idle-time, and inter-arrival-time measurements were used as
+observable proxies for the burst-oriented mechanism described in
+Section~\ref{subsec:threat_model}. Because the dataset does not provide a
+dedicated Low-Rate DDoS label, this experiment is interpreted as an
+IoT-focused flow-level attack benchmark using threat-model-aligned proxies,
+not as ground-truth validation of every low-rate attack condition.
+
+In this study, the benchmark task is formulated as a binary classification problem. Benign flows are assigned to class 0, while attack flows are assigned to class 1. Since the CIC-DDoS2019 records are represented as flow-level statistical observations, the evaluation focuses on structured flow features rather than packet-level temporal sequences. This representation is consistent with the goal of assessing whether causal knowledge can improve the transparency and reliability of flow-level Low-Rate DDoS detection.
+
+\subsection{Preprocessing Procedure}
+
+% Verify the node-wise selector, split order, balancing method, and random seed
+% against the complete experimental notebook before submission.
+
+Before training and evaluation, the synthetic and benchmark traffic data were
+processed to ensure numerical consistency. For the synthetic dataset, the
+generated variables were already structured according to the predefined
+causal graph; preprocessing was therefore limited to formatting the variables
+and preparing the binary outcome for effect estimation and supervised
+classification.
+
+For both benchmark datasets, column names were normalized, labels were mapped
+to the binary benign/attack task, and non-finite or missing numerical entries
+were replaced with zero. The labeled records were then divided into training
+and held-out test partitions using an 80/20 split before any data-dependent
+feature selection, scaling, or class balancing was performed.
+
+Only numerical candidate features were considered for the detector. The
+features were first assigned to the four semantic groups listed in
+Table~\ref{tab:feature_mapping}: burst duration, TCP timeout, queue
+degradation, and normal-traffic context. Within each group, the candidate with
+the highest variance on the training partition was retained to construct the
+four-dimensional mapping $\mathbf{x}_i=\phi(\mathbf{z}_i)$. Consequently, the
+detector receives one dataset-specific proxy for each input node rather than
+all candidate measurements simultaneously.
+
+To connect the statistical flow measurements to the semantic concepts encoded
+in the causal graph, Table~\ref{tab:feature_mapping} summarizes representative
+observable features associated with each mechanism-level DAG node. The
+mapping is informed by the burst-and-silence behavior of Low-Rate DDoS attacks
+and by standard TCP retransmission-timer and queue-management semantics
+\cite{kuzmanovic2003lowrate,rfc6298,rfc7567}. These measurements are indirect,
+interpretable proxies rather than direct observations of protocol state; the
+mapping also does not imply that every listed feature was simultaneously
+retained by the variance-based selection procedure.
+
+\begin{table*}[!t]
+  \centering
+  \caption{Mapping between semantic causal variables and representative flow features in the CICFlowMeter-derived Bot-IoT variant}
+  \label{tab:feature_mapping}
+  \renewcommand{\arraystretch}{1.15}
+  \begin{tabular}{@{}L{0.20\textwidth}L{0.29\textwidth}L{0.45\textwidth}@{}}
+    \toprule
+    Semantic Causal Variable (DAG Node) & Representative Flow Features (from Bot-IoT) & Rationale for Low-Rate DDoS \\
+    \midrule
+    Burst Duration & \textit{Flow Duration}, \textit{Fwd IAT Total}, \textit{Bwd IAT Total} & Captures the intermittent, low-rate timing dynamics and total inter-arrival delays of attack bursts. \\
+    TCP Timeout & \textit{Bwd IAT Max}, \textit{Fwd IAT Max} & Extreme maximum inter-arrival times can reflect TCP retransmission and timeout-related behavior. \\
+    Queue Drop & \textit{Idle Max}, \textit{Idle Min}, \textit{Idle Mean}, \textit{Bwd IAT Mean} & Prolonged delays and idle periods in directional traffic can serve as indirect indicators of queue buildup and degradation. \\
+    Normal Traffic (Context) & \textit{Flow IAT Max} & Represents background timing variation that provides network-context information for the semantic proxy representation. \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+The training-only variance selector retained \textit{Flow Duration},
+\textit{Fwd IAT Max}, \textit{Idle Max}, and \textit{Flow IAT Max} for the
+MSSQL experiment. For CIC-BoT-IoT, it retained \textit{Flow Duration},
+\textit{Bwd IAT Max}, \textit{Idle Max}, and \textit{Flow IAT Max}. These
+dataset-specific selections were fitted without access to the held-out test
+records.
+
+The mean and standard deviation used for z-score normalization were estimated
+from the training partition and subsequently applied to the held-out test
+partition. Class balancing was restricted to the training data; test records
+were neither resampled nor used to fit the feature selector or scaler. A
+validation subset was drawn from the resulting training data for monitoring
+model learning.
+
+The overall preprocessing workflow can be summarized as follows:
+
+\begin{enumerate}
+  \item normalize column names, clean numerical entries, and encode labels;
+  \item split labeled records into training and held-out test partitions;
+  \item fit the node-wise variance selector using training data only;
+  \item fit the z-score scaler using the selected training features;
+  \item balance only the training partition;
+  \item apply the fitted selector and scaler to the untouched test partition.
+\end{enumerate}
+
+\subsection{Implementation Settings}
+
+The validated experiments used TensorFlow 2.20.0, pandas 2.3.3, NumPy
+2.0.2, scikit-learn 1.6.1, XGBoost 3.2.0, DoWhy 0.14, and PyArrow 24.0.0.
+TensorFlow/Keras was used for neural model construction and training
+\cite{abadi2016tensorflow}; scikit-learn supported splitting, scaling, and
+preprocessing \cite{pedregosa2011scikit}; and DoWhy supported graph-based
+identification, estimation, and refutation \cite{sharma2020dowhy}.
+
+Both neural models used hidden layers of 64 and 32 ReLU units, with a 0.30
+dropout layer after the first hidden layer. They were trained with Adam
+($10^{-3}$ learning rate) \cite{kingma2015adam}, binary cross-entropy, 20
+epochs, and a batch size of 64. A sigmoid output produced the attack
+probability, and 10\% of the balanced training partition was reserved for
+validation. All stochastic operations used seed 42. The XGBoost reference
+used 100 trees, maximum depth 6, learning rate 0.10, and histogram-based tree
+construction.
+
+Inference time was measured after a warm-up prediction on at most 100,000
+held-out flows. Each model was timed over five repetitions; neural inference
+used a batch size of 1024. Table~\ref{tab:main_results} reports the mean and
+standard deviation in milliseconds per flow. These values characterize the
+active Kaggle runtime and should not be interpreted as hardware-independent
+latency guarantees.
+
+The same preprocessing pipeline, train-test split strategy, loss function, optimizer, number of epochs, and batch size were used for both the proposed causal-aware model and the non-causal baseline. This setting ensures that the comparison between the two models reflects the effect of the causal component rather than differences in data preparation or training configuration.
+
+The experiments were designed to remain lightweight and reproducible. Therefore, the implementation avoids complex hyperparameter tuning and focuses on evaluating whether the causal knowledge component introduced in Section IV can be integrated into a practical flow-level detection pipeline. The source code and experimental artifacts are made available through the public repository and archived package referenced in the paper.
+
+\subsection{Baseline and Comparative Setup}
+
+To assess the contribution of the causal component, a non-causal baseline model was implemented under the same experimental conditions. The baseline follows the same flow-level classification setting as the proposed model, but it does not include the causal propagation layer introduced in Section IV. Therefore, the comparison isolates the effect of incorporating causal knowledge into the detection pipeline.
+
+The baseline model receives the same standardized input features, uses the same binary labels, and is trained on the same balanced training data. It also follows the same optimization settings, including the Adam optimizer, binary cross-entropy loss, batch size, number of epochs, and train-test split. This controlled setup ensures that differences between the proposed model and the baseline are not caused by preprocessing, data partitioning, or training configuration.
+
+For the CIC-BoT-IoT evaluation, XGBoost was additionally included as a strong
+tree-based reference classifier \cite{chen2016xgboost}. Because it belongs to
+a different model family from the two neural detectors, its result is used to
+contextualize the achievable predictive accuracy on that subset rather than
+to isolate the effect of the causal propagation layer.
+
+The purpose of the baseline comparison is not only to determine whether the proposed model improves classification accuracy. In flow-level DDoS detection, a non-causal neural classifier may achieve competitive predictive performance while still providing limited insight into the underlying attack mechanism. For this reason, the comparison also considers the interpretability and causal alignment provided by the proposed framework.
+
+In the benchmark-data experiment, predictive performance is compared between the proposed causal-aware model and the plain MLP baseline. In the causal validation stage, effect estimation and refutation analysis are used to assess the consistency and sensitivity of the assumed mechanism under the controlled setting. Together, these comparisons allow the evaluation to distinguish between purely predictive accuracy and mechanism-aware detection.
+
+\subsection{Causal Validation Protocol}
+\label{subsec:causal_validation_protocol}
+
+The causal validation stage was designed to examine whether the causal assumptions encoded in the proposed Knowledge Plane yield an identifiable and stable effect under the controlled setting. For this purpose, the DoWhy framework was used to specify the causal graph, identify the causal estimand, estimate the causal effect, and conduct refutation analysis \cite{sharma2020dowhy}.
+
+In the causal graph, \textit{Burst\_Duration} was defined as the treatment variable and \textit{Attack\_Label} as the binary attack-state outcome. The variable \textit{Normal\_Traffic} was included as a background context variable because traffic conditions may influence both queue behavior and the observed outcome. Under the specified graph it is not a parent of \textit{Burst\_Duration} and is therefore not described as an observed treatment--outcome confounder. The assumed mechanism follows the chain in which burst behavior affects TCP timeout, TCP timeout contributes to queue degradation, and queue degradation precedes the observed attack state.
+
+The causal estimand was identified from the specified DAG using DoWhy and the
+intervention framework of Pearl \cite{pearl2009causality}. The ATE contrast
+quantifies the expected change in the binary synthetic outcome between the
+encoded burst-duration levels $T=1$ and $T=0$. The estimate should therefore
+be interpreted conditionally on the stated graph and synthetic encoding, not
+as evidence that all unmeasured confounding has been eliminated.
+
+To examine the sensitivity of the estimated effect, a random common-cause refutation was applied. This test measures how much the estimate changes when an additional randomly generated confounding variable is introduced. Stability under this test indicates limited sensitivity to this particular perturbation, but it does not exclude other forms of confounding or model misspecification.
+
+The causal validation protocol therefore serves a different role from the classification experiment. While the detection experiment evaluates whether the model can distinguish benign and malicious flows, the causal validation experiment evaluates whether the mechanism represented in the Knowledge Plane is consistent with the assumed Low-Rate DDoS behavior.
+
+\subsection{Evaluation Metrics}
+\label{subsec:evaluation_metrics}
+
+The evaluation uses predictive and causal indicators. Predictive metrics assess
+the detection capability of the framework, whereas the causal estimate and
+refutation assess the stated synthetic causal hypothesis under its specified
+graph and treatment encoding.
+
+For the synthetic experiment, the F1-score was used as the classification
+metric. The ATE contrast and its random common-cause refutation were reported
+separately to characterize the magnitude and sensitivity of the synthetic
+effect estimate.
+
+For both benchmark evaluations, accuracy, precision, recall, attack-class
+F1-score, balanced accuracy, ROC-AUC, average precision, and the false-positive
+rate (FPR) were computed on the untouched test partition. Because both
+benchmarks are dominated by attack records, accuracy, precision, and
+attack-class F1-score can remain high even when benign traffic is
+misclassified. Balanced accuracy and FPR are therefore emphasized in the
+discussion: balanced accuracy gives equal weight to benign and attack recall,
+whereas FPR directly quantifies the fraction of benign flows incorrectly
+flagged as attacks. Per-flow inference time was reported as an
+implementation-level measurement under the protocol described above.
+
+Finally, refutation analysis was used as a sensitivity indicator for the causal effect estimation. The refutation result does not replace predictive evaluation; rather, it complements it by testing whether the estimated causal effect remains stable under a specified perturbation of the causal model. Together, these metrics allow the experimental evaluation to address both detection performance and causal interpretability.
+
+\section{Results and Discussion}
+\label{sec:results}
+
+This section presents and discusses the experimental findings of the proposed causal-aware explainable detection framework. The results are reported according to the research questions defined in Section~\ref{sec:experimental_methodology}. First, the causal validation results are presented to examine whether the assumed Low-Rate DDoS mechanism produces a measurable causal effect. Second, the detection performance of the proposed model is evaluated on benchmark traffic. Finally, the causal and explainability aspects of the framework are discussed to clarify the contribution of the proposed Knowledge Plane beyond predictive accuracy alone.
+
+\subsection{Main Results}
+\label{subsec:main_results}
+
+Table~\ref{tab:main_results} compares the predictive performance and per-flow inference time of the proposed Causal-MLP with neural and tree-based baselines on CIC-DDoS2019 MSSQL and CIC-BoT-IoT. Comparisons should be interpreted within each dataset because their traffic distributions differ substantially.
+
+\begin{table*}[!t]
+  \centering
+  \caption{Performance on untouched, naturally imbalanced test partitions; inference time is mean $\pm$ standard deviation over five repetitions}
+  \label{tab:main_results}
+  \footnotesize
+  \begin{tabular}{@{}L{0.21\textwidth}L{0.16\textwidth}cccccc@{}}
+    \toprule
+    Model & Dataset & Acc. & Bal. Acc. & F1 & ROC-AUC & FPR &
+    \shortstack{Time\\(ms/flow)} \\
+    \midrule
+    Non-causal MLP & MSSQL & 0.9990 & 0.8431 & 0.9995 & 0.9071 & 0.3131 & $0.002833\pm0.000122$ \\
+    Causal-MLP (Ours) & MSSQL & 0.9990 & 0.8431 & 0.9995 & 0.9069 & 0.3131 & $0.002857\pm0.000150$ \\
+    Non-causal MLP & CIC-BoT-IoT & 0.9391 & 0.9591 & 0.9685 & 0.9788 & 0.0208 & $0.002885\pm0.000153$ \\
+    Causal-MLP (Ours) & CIC-BoT-IoT & 0.9389 & 0.9592 & 0.9684 & 0.9787 & 0.0204 & $0.002913\pm0.000146$ \\
+    XGBoost & CIC-BoT-IoT & 0.9631 & 0.9727 & 0.9812 & 0.9947 & 0.0177 & $0.000892\pm0.000035$ \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+In the synthetic experiment, the random-forest reference classifier achieved
+an F1-score of 0.9224. The estimated Average Treatment Effect (ATE) of
+\textit{Burst\_Duration} on \textit{Attack\_Label} was 0.14095, and the
+random common-cause refutation produced 0.140949. The absolute change was
+approximately $1.36\times10^{-6}$ (refutation $p=0.98$), indicating negligible
+sensitivity to this particular perturbation.
+
+The MSSQL held-out test contained 559 benign and 1,154,599 attack records.
+Consequently, the common accuracy of 0.9990 and attack-class F1-score of
+0.9995 are dominated by attack prevalence. Both neural models produced the
+same thresholded confusion matrix, corresponding to balanced accuracy 0.8431
+and FPR 0.3131. Their ROC-AUC values were also similar (0.9071 for the plain
+MLP and 0.9069 for the Causal-MLP). Thus, the causal layer did not improve
+MSSQL discrimination and the relatively high benign false-alarm rate remains
+an important operational limitation.
+
+The CIC-BoT-IoT held-out test contained 7,687 benign and 2,293,025 attack
+records. The Causal-MLP achieved balanced accuracy 0.9592, F1-score 0.9684,
+ROC-AUC 0.9787, and FPR 0.0204. Relative to the plain MLP, it slightly reduced
+FPR (0.0208 to 0.0204) and slightly increased balanced accuracy (0.9591 to
+0.9592), while accuracy and F1-score decreased marginally. XGBoost obtained
+the strongest Bot-IoT performance, with balanced accuracy 0.9727, F1-score
+0.9812, ROC-AUC 0.9947, and FPR 0.0177.
+
+These results address RQ1 by showing that the estimated effect remains stable
+under the selected refutation and address RQ2 by demonstrating competitive
+within-dataset detection performance across two complementary benchmarks.
+
+\subsection{Comparative Results and Causal Refutation}
+\label{subsec:comparative_refutation}
+
+The learned propagation coefficient provides evidence that the structural
+prior participated in optimization. Starting from 0.1, $\alpha$ increased to
+0.2323 on MSSQL but decreased to 0.0371 on CIC-BoT-IoT. The latter reduction
+suggests that the optimizer assigned limited weight to the specified
+propagation pattern for that benchmark. This adaptive behavior is preferable
+to treating the graph as a fixed transformation, but it is not evidence that
+the assumed causal graph is correct.
+
+The matched MSSQL predictions and the small Bot-IoT differences indicate that
+adding causal propagation did not materially change neural predictive
+performance under the matched evaluation conditions. The stronger XGBoost
+scores also clarify that the proposed model is not presented as the most
+accurate classifier; its intended contribution is an explicit, inspectable
+mechanism-level structure.
+
+The negligible change produced by the random common-cause refutation supports
+the stability of the estimated effect under that specific perturbation. It
+does not establish that the graph is universally valid or that all possible
+confounding structures have been excluded. Rather, it provides evidence for
+the internal consistency of the assumed causal mechanism within the
+controlled synthetic setting.
+
+Mean absolute input gradients were aggregated over up to 2,048 held-out
+records. For MSSQL, \textit{Burst\_Duration} (4.9712) and
+\textit{Normal\_Traffic} (4.9681) were the most influential nodes, followed
+by \textit{TCP\_Timeout} (2.4744) and \textit{Queue\_Drop} (1.5038). For
+CIC-BoT-IoT, \textit{Normal\_Traffic} (0.1416) and \textit{TCP\_Timeout}
+(0.1356) ranked above \textit{Burst\_Duration} (0.0976) and
+\textit{Queue\_Drop} (0.0325). These are predictive sensitivity scores, not
+causal effects; their magnitudes should not be compared across datasets. The
+fact that \textit{Queue\_Drop} was not dominant also cautions against treating
+saliency as automatic confirmation of the authored DAG. Attribution fidelity
+and repeated-run stability remain subjects for further evaluation.
+
+Overall, the comparative analysis addresses RQ3: the causal component does not
+provide an accuracy advantage over the strongest baseline, but it adds an
+explicit mechanism-level representation that can be inspected alongside the
+prediction and the independently estimated causal effect.
+
+\subsection{Limitations and Practical Implications}
+\label{subsec:limitations_implications}
+
+Although the experimental results support the proposed causal-aware framework, several limitations should be considered. First, the causal validation experiment was conducted using a controlled synthetic dataset. This setting is useful for examining the assumed causal mechanism under known structural conditions, but it cannot fully represent the complexity of real IoT networks. In real deployments, traffic patterns may be affected by device heterogeneity, routing dynamics, application behavior, and changing network loads.
+
+Second, the predictive evaluation uses the MSSQL subset of CIC-DDoS2019 and a
+CICFlowMeter-derived third-party Bot-IoT variant. These datasets provide
+complementary flow-level attack benchmarks, but neither supplies complete
+ground-truth coverage of the full range of Low-Rate DDoS timing strategies.
+The reported benchmark results should therefore be interpreted as
+within-dataset detection evaluations using threat-model-aligned timing
+proxies, not as universal validation across all Low-Rate DDoS variants.
+
+Third, both benchmark files are extremely attack-dominant. Although the test
+partitions were left at their natural distributions to avoid evaluation
+leakage, MSSQL contained only 559 benign test flows and exhibited a Causal-MLP
+FPR of 31.31\%. The Bot-IoT variant contained 7,687 benign test flows and a
+substantially lower FPR of 2.04\%. Accuracy and attack-class F1-score must
+therefore be read together with balanced accuracy, ROC-AUC, FPR, and the
+reported class counts.
+
+\textit{Predictive-performance trade-off:}
+On CIC-BoT-IoT, the proposed Causal-MLP achieved balanced accuracy 95.92\%,
+compared with 95.91\% for the plain MLP and 97.27\% for XGBoost. The neural
+comparison shows near parity rather than a consistent predictive advantage;
+the tree ensemble remains stronger on raw discrimination. The contribution of
+the Causal-MLP is instead to expose a domain-informed hypothesis and a learned
+propagation strength that can be inspected separately from the classifier
+output. The DoWhy refutation concerns the sensitivity of the estimated effect
+in the controlled synthetic experiment; it does not demonstrate classifier
+robustness against adversarial manipulation or distribution shift. Evaluating
+those properties requires dedicated perturbation and cross-domain experiments.
+
+A further limitation concerns the causal graph itself. The proposed Knowledge Plane relies on a domain-informed causal structure that represents the assumed relationship among burst behavior, TCP timeout, queue degradation, and the synthetic attack-state outcome. Stability under one refutation supports only limited internal consistency and does not establish universal graph validity. The graph and its treatment encoding may therefore need to be adapted for other attack types, protocols, or network environments.
+
+The current implementation also focuses on offline flow-level detection. Although the proposed framework is designed with Knowledge-Defined IoT networks in mind, real-time deployment in an SDN controller would require additional evaluation of detection latency, controller overhead, memory consumption, and the cost of causal explanation generation. These factors are especially important in resource-constrained IoT environments.
+
+Despite these limitations, the proposed framework has several practical implications. By embedding causal knowledge into the detection pipeline, the model can provide explanations that are more closely aligned with the expected attack mechanism than purely correlation-based feature importance. This can help network operators distinguish between statistical anomalies and mechanism-relevant indicators of Low-Rate DDoS behavior.
+
+In a Knowledge-Defined IoT network, such explanations can support more informed security decisions. For example, the controller can compare whether burst, timeout, queue, or background-context proxies dominate an alert, adjust monitoring thresholds, or trigger further inspection before applying stronger countermeasures. The present gradient results also show why this inspection must remain empirical: the most sensitive node differed by dataset and did not simply reproduce the authored causal chain.
+
+Overall, the findings suggest that causal knowledge integration can complement conventional deep learning-based detection. The proposed approach maintains competitive predictive performance while adding a causal interpretation layer that improves transparency and supports security analysis. Future work should extend the framework toward online SDN-based deployment, broader benchmark evaluation, and adaptive causal graph updating under changing network conditions.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+Detecting Low-Rate DDoS attacks is challenging in IoT networks with a Knowledge
+Plane because the attacks can cause subtle protocol and resource degradation
+without clear traffic-volume anomalies. This paper addressed the problem with
+a causal-aware explainable framework that integrates domain knowledge about
+burst behavior, TCP timeouts, and queue degradation into the learning process.
+
+The controlled experiment estimated a burst-duration effect of 0.14095, which
+remained effectively unchanged under the selected random common-cause
+refutation. In the leakage-safe benchmark evaluation, the Causal-MLP achieved
+balanced accuracy 84.31\% on CIC-DDoS2019 MSSQL and 95.92\% on the
+IoT-focused CIC-BoT-IoT variant. It matched the plain MLP at the MSSQL
+decision threshold and remained close to the neural baseline on Bot-IoT,
+while XGBoost achieved the strongest raw predictive performance. The learned
+propagation coefficient adapted from 0.2323 on MSSQL to 0.0371 on Bot-IoT,
+showing that the model can modulate rather than rigidly impose the authored
+prior. These findings support the feasibility of integrating an inspectable
+mechanism-level representation into an offline flow detector, but they do not
+show a consistent accuracy advantage or establish universal causal validity.
+
+The broader implication of this work is that intrusion detection in programmable IoT networks should not be evaluated only by classification accuracy. For operational security, it is also important to understand whether model decisions are aligned with plausible attack mechanisms. The proposed framework contributes to this direction by connecting detection outputs with causal concepts that can be interpreted by network operators.
+
+Future work will focus on three directions. First, the framework should be evaluated in online SDN-enabled IoT environments, where detection latency, controller overhead, and mitigation response time can be measured directly. Second, the causal graph and treatment encoding should be extended across additional DDoS categories, heterogeneous IoT datasets, and changing network conditions. Third, repeated-run attribution, perturbation, and cross-domain experiments should be conducted to quantify explanation stability and predictive robustness.
+
+\section*{Acknowledgment}
+
+The authors would like to acknowledge the Canadian Institute for Cybersecurity for providing the CIC-DDoS2019 dataset used in this study. The authors also acknowledge the open-source software communities behind TensorFlow/Keras, scikit-learn, and DoWhy, which supported the implementation and causal analysis of the proposed framework.
+\begingroup
+\sloppy
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+\endgroup
+
+% Author biographies are generally added for the final accepted manuscript if
+% requested by the journal. Do not include them in the initial draft unless the
+% submission instructions require them.
+
+\end{document}
