@@ -7,10 +7,13 @@ This repository preserves the original v1.0.0 experiment implementation in
 performed in Kaggle in response to peer-review feedback. The original v1.0.0
 release remains available in GitHub and Zenodo.
 
-**Status:** Code and summary files are prepared for the revised manuscript;
-full archived outputs are **not yet published as v1.1.0 in Zenodo**. Do not
-interpret the concept DOI below as proof that the new outputs are already
-available there.
+**Status (21 October 2026):** The five-seed validated experimental outputs have been published in Zenodo as version v1.1.0. The complete experimental archive is provided in six sequential parts, accompanied by reconstruction instructions and an MD5 integrity check.
+
+- **Zenodo v1.1.0 (validated outputs):** https://doi.org/10.5281/zenodo.23441576
+- **Zenodo concept DOI (all versions):** https://doi.org/10.5281/zenodo.22280769
+- **Original Zenodo release (v1.0.0):** https://doi.org/10.5281/zenodo.22280770
+
+The GitHub repository contains the source code, experiment scripts, reproducibility documentation, and summarized results. The complete experimental artifacts are archived in Zenodo.
 
 ### Reproducibility resources
 
