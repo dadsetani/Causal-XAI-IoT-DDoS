@@ -175,6 +175,10 @@ For reproducibility of the revised experiments, cite the version-specific DOI. F
 
 ## License
 
-No software or data license is assigned in this preparation bundle. The
-authors should select and add an appropriate license before publishing the
-release.
+## License
+
+The software source code in this repository is distributed under the MIT License. See the [LICENSE](LICENSE) file for the full license text.
+
+Copyright (c) 2026 Bahareh Mohammadi.
+
+The associated Zenodo record is published under Creative Commons Attribution 4.0 International (CC BY 4.0). Users should consult the licensing information associated with each resource and preserve the applicable copyright and attribution notices.
